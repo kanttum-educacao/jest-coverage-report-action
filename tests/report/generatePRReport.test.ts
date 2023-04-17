@@ -14,9 +14,18 @@ const DEFAULT_OPTIONS: Options = {
     prNumber: 7,
     pullRequest: {
         number: 7,
-        head: { sha: '123456', ref: '123' },
-        base: { ref: '456' },
+        head: {
+            sha: '123456',
+            ref: '123',
+            repo: { clone_url: 'https://github.com/test/repo.git' },
+        },
+        base: {
+            sha: '256',
+            ref: '456',
+            repo: { clone_url: 'https://github.com/test/repo.git' },
+        },
     },
+    output: ['comment'],
 };
 
 describe('generatePRReport', () => {
@@ -36,9 +45,11 @@ describe('generatePRReport', () => {
                 number: 7,
             },
             ({
-                issues: {
-                    updateComment,
-                    createComment,
+                rest: {
+                    issues: {
+                        updateComment,
+                        createComment,
+                    },
                 },
                 paginate,
             } as unknown) as ReturnType<typeof getOctokit>
@@ -75,9 +86,11 @@ describe('generatePRReport', () => {
                 number: 7,
             },
             ({
-                issues: {
-                    updateComment,
-                    createComment,
+                rest: {
+                    issues: {
+                        updateComment,
+                        createComment,
+                    },
                 },
                 paginate,
             } as unknown) as ReturnType<typeof getOctokit>

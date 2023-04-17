@@ -1,8 +1,9 @@
-import { setFailed } from '@actions/core';
+import { setFailed, setOutput } from '@actions/core';
 import { context, getOctokit } from '@actions/github';
 
 import { createCoverageAnnotations } from './annotations/createCoverageAnnotations';
 import { createFailedTestsAnnotations } from './annotations/createFailedTestsAnnotations';
+import { onlyChanged } from './filters/onlyChanged';
 import { formatCoverageAnnotations } from './format/annotations/formatCoverageAnnotations';
 import { formatFailedTestsAnnotations } from './format/annotations/formatFailedTestsAnnotations';
 import { generateCommitReport } from './report/generateCommitReport';
@@ -10,11 +11,16 @@ import { generatePRReport } from './report/generatePRReport';
 import { checkThreshold } from './stages/checkThreshold';
 import { createReport } from './stages/createReport';
 import { getCoverage } from './stages/getCoverage';
-import { switchBack, switchBranch } from './stages/switchBranch';
+import {
+    checkoutRef,
+    getCurrentBranch,
+    switchBranch,
+} from './stages/switchBranch';
 import { JsonReport } from './typings/JsonReport';
 import { getOptions } from './typings/Options';
 import { createDataCollector, DataCollector } from './utils/DataCollector';
 import { getNormalThreshold } from './utils/getNormalThreshold';
+import { getPrPatch } from './utils/getPrPatch';
 import { i18n } from './utils/i18n';
 import { runStage } from './utils/runStage';
 
@@ -43,10 +49,44 @@ export const run = async (
         }
     );
 
+    const [, initialBranch] = await runStage(
+        'getBranch',
+        dataCollector,
+        (skip) => {
+            if (!isInPR) {
+                skip();
+            }
+
+            return getCurrentBranch();
+        }
+    );
+
+    const [isHeadSwitched] = await runStage(
+        'switchToHead',
+        dataCollector,
+        async (skip) => {
+            const head = options?.pullRequest?.head;
+
+            // no need to switch branch when:
+            // - this is not a PR
+            // - this is the PR head branch
+            // - a head coverage is provided
+            if (!isInPR || !head || !!options.coverageFile) {
+                skip();
+            }
+
+            await checkoutRef(head!, 'covbot-pr-head-remote', 'covbot/pr-head');
+        }
+    );
+
     const [isHeadCoverageGenerated, headCoverage] = await runStage(
         'headCoverage',
         dataCollector,
-        async () => {
+        async (skip) => {
+            if (isInPR && !isHeadSwitched && !options.coverageFile) {
+                skip();
+            }
+
             return await getCoverage(
                 dataCollector,
                 options,
@@ -64,17 +104,17 @@ export const run = async (
         'switchToBase',
         dataCollector,
         async (skip) => {
-            const baseBranch = options?.pullRequest?.base?.ref;
+            const base = options?.pullRequest?.base;
 
             // no need to switch branch when:
             // - this is not a PR
             // - this is the PR base branch
-            // - a baseCoverageFile is provided
-            if (!isInPR || !baseBranch || !!options.baseCoverageFile) {
+            // - a base coverage is provided
+            if (!isInPR || !base || !!options.baseCoverageFile) {
                 skip();
             }
 
-            await switchBranch(baseBranch as string);
+            await checkoutRef(base!, 'covbot-pr-base-remote', 'covbot/pr-base');
         }
     );
 
@@ -84,7 +124,7 @@ export const run = async (
         'baseCoverage',
         dataCollector,
         async (skip) => {
-            if (!isSwitched && !options.baseCoverageFile) {
+            if (!isSwitched && !isHeadSwitched && !options.baseCoverageFile) {
                 skip();
             }
 
@@ -97,12 +137,15 @@ export const run = async (
         }
     );
 
-    await runStage('switchBack', dataCollector, async (skip) => {
-        if (!isSwitched) {
+    await runStage('switchBack', dataCollector, (skip) => {
+        if (!initialBranch) {
+            console.warn(
+                'Not checked out to the original branch - failed to get it.'
+            );
             skip();
         }
 
-        await switchBack();
+        return switchBranch(initialBranch!);
     });
 
     if (baseCoverage) {
@@ -135,7 +178,7 @@ export const run = async (
     );
 
     await runStage('publishReport', dataCollector, async (skip) => {
-        if (!isReportContentGenerated) {
+        if (!isReportContentGenerated || !options.output.includes('comment')) {
             skip();
         }
 
@@ -158,6 +201,19 @@ export const run = async (
         }
     });
 
+    await runStage('setOutputs', dataCollector, (skip) => {
+        if (
+            !isReportContentGenerated ||
+            !options.output.includes('report-markdown')
+        ) {
+            skip();
+        }
+
+        if (options.output.includes('report-markdown')) {
+            setOutput('report', summaryReport!.text);
+        }
+    });
+
     await runStage('failedTestsAnnotations', dataCollector, async (skip) => {
         if (
             !isHeadCoverageGenerated ||
@@ -173,7 +229,7 @@ export const run = async (
         }
 
         const octokit = getOctokit(options.token);
-        await octokit.checks.create(
+        await octokit.rest.checks.create(
             formatFailedTestsAnnotations(
                 summaryReport!.runReport,
                 failedAnnotations,
@@ -190,14 +246,18 @@ export const run = async (
             skip();
         }
 
-        const coverageAnnotations = createCoverageAnnotations(headCoverage!);
+        let coverageAnnotations = createCoverageAnnotations(headCoverage!);
 
         if (coverageAnnotations.length === 0) {
             skip();
         }
 
         const octokit = getOctokit(options.token);
-        await octokit.checks.create(
+        if (options.pullRequest?.number) {
+            const patch = await getPrPatch(octokit, options);
+            coverageAnnotations = onlyChanged(coverageAnnotations, patch);
+        }
+        await octokit.rest.checks.create(
             formatCoverageAnnotations(coverageAnnotations, options)
         );
     });
