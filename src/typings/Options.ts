@@ -9,21 +9,9 @@ export type IconType = keyof typeof icons;
 export type AnnotationType = 'all' | 'none' | 'coverage' | 'failed-tests';
 export type PackageManagerType = 'npm' | 'yarn' | 'pnpm';
 export type SkipStepType = 'all' | 'none' | 'install';
-export type OutputType = 'comment' | 'report-markdown';
-
-export type GithubRepo = {
-    clone_url: string;
-};
-
-export type GithubRef = {
-    ref: string;
-    sha: string;
-    repo: GithubRepo;
-};
-
 export type PullRequest = {
-    base: GithubRef;
-    head: GithubRef;
+    base: { ref: string };
+    head: { ref: string; sha: string };
     number: number;
 };
 export type Options = {
@@ -40,7 +28,6 @@ export type Options = {
     baseCoverageFile?: string;
     prNumber: null | number;
     pullRequest: null | PullRequest;
-    output: Array<OutputType>;
 };
 
 const validAnnotationOptions: Array<AnnotationType> = [
@@ -60,11 +47,6 @@ const validIconOptions = Object.keys(icons);
 
 const validSkipStepOptions: Array<SkipStepType> = ['all', 'none', 'install'];
 
-const validOutputTypeOptions: Array<OutputType> = [
-    'comment',
-    'report-markdown',
-];
-
 const optionSchema = yup.object().shape({
     token: yup.string().required(),
     testScript: yup.string().required(),
@@ -83,11 +65,6 @@ const optionSchema = yup.object().shape({
     baseCoverageFile: yup.string(),
     prNumber: yup.number().nullable(),
     pullRequest: yup.object().nullable(),
-    output: yup
-        .array()
-        .required()
-        .transform((_, originalValue: string) => originalValue.split(', '))
-        .of(yup.string().required().oneOf(validOutputTypeOptions)),
 });
 
 export const shouldInstallDeps = (skipStep: SkipStepType): Boolean =>
@@ -114,17 +91,17 @@ export const getOptions = async (): Promise<Options> => {
     const prNumber: number | null = Number(
         getInput('prnumber') || context?.payload?.pull_request?.number
     );
-    const output = getInput('output');
     let pullRequest = context?.payload?.pull_request || null;
 
     if (!pullRequest && !Number.isNaN(prNumber)) {
-        const { data: pr } = await octokit.rest.pulls.get({
+        const { data: pr } = await octokit.pulls.get({
             owner: context.repo.owner,
             repo: context.repo.repo,
             pull_number: prNumber,
         });
         pullRequest = pr as PullRequest;
     }
+
     try {
         const options: Options = (await optionSchema.validate({
             token,
@@ -140,7 +117,6 @@ export const getOptions = async (): Promise<Options> => {
             baseCoverageFile,
             prNumber: prNumber || null,
             pullRequest,
-            output,
         })) as Options;
 
         return options;

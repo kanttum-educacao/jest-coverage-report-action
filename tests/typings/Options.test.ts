@@ -33,13 +33,10 @@ const options = {
     ['custom-title']: 'title',
     ['coverage-file']: 'file.json',
     ['base-coverage-file']: 'base.json',
-    output: 'comment',
 };
 const OctokitMock = () => ({
-    rest: {
-        pulls: {
-            get: jest.fn(() => ({ data: pr })),
-        },
+    pulls: {
+        get: jest.fn(() => ({ data: pr })),
     },
 });
 const baseContext = {
@@ -61,23 +58,6 @@ const pushContext = {
     payload: {},
 };
 
-const parsedOptions = {
-    token: 'TOKEN',
-    testScript: 'npm run test:coverage',
-    threshold: 80,
-    workingDirectory: 'dir',
-    iconType: 'ascii',
-    annotations: 'all',
-    packageManager: 'npm',
-    skipStep: 'none',
-    customTitle: 'title',
-    coverageFile: 'file.json',
-    baseCoverageFile: 'base.json',
-    prNumber: null,
-    pullRequest: null,
-    output: ['comment'],
-};
-
 describe('getOptions', () => {
     let octokit: ReturnType<typeof OctokitMock>;
 
@@ -94,7 +74,21 @@ describe('getOptions', () => {
     it('should return options object', async () => {
         mockInput(options);
 
-        expect(await getOptions()).toStrictEqual(parsedOptions);
+        expect(await getOptions()).toStrictEqual({
+            token: 'TOKEN',
+            testScript: 'npm run test:coverage',
+            threshold: 80,
+            workingDirectory: 'dir',
+            iconType: 'ascii',
+            annotations: 'all',
+            packageManager: 'npm',
+            skipStep: 'none',
+            customTitle: 'title',
+            coverageFile: 'file.json',
+            baseCoverageFile: 'base.json',
+            prNumber: null,
+            pullRequest: null,
+        });
     });
 
     it('should validate input', async () => {
@@ -128,26 +122,6 @@ describe('getOptions', () => {
 
         mockInput({ ...options, ['threshold']: 'asdf' });
         await expect(getOptions()).resolves.toBeDefined();
-        clearInputMock();
-
-        mockInput({ ...options, ['output']: 'comment' });
-        await expect(getOptions()).resolves.toBeDefined();
-        clearInputMock();
-
-        mockInput({ ...options, ['output']: 'unknown-option' });
-        await expect(getOptions()).rejects.toBeDefined();
-        clearInputMock();
-
-        mockInput({ ...options, ['output']: 'comment, report-markdown' });
-        await expect(getOptions()).resolves.toBeDefined();
-        clearInputMock();
-
-        mockInput({
-            ...options,
-            ['output']: 'comment, report-markdown, unknown-option',
-        });
-        await expect(getOptions()).rejects.toBeDefined();
-        clearInputMock();
     });
 
     it('should throw non-validation error', async () => {
@@ -169,7 +143,17 @@ describe('getOptions', () => {
         mockInput(options);
 
         expect(await getOptions()).toStrictEqual({
-            ...parsedOptions,
+            token: 'TOKEN',
+            testScript: 'npm run test:coverage',
+            threshold: 80,
+            workingDirectory: 'dir',
+            iconType: 'ascii',
+            annotations: 'all',
+            packageManager: 'npm',
+            skipStep: 'none',
+            customTitle: 'title',
+            coverageFile: 'file.json',
+            baseCoverageFile: 'base.json',
             prNumber: 1234,
             pullRequest: pr,
         });
@@ -179,33 +163,63 @@ describe('getOptions', () => {
         mockContext(pushContext);
         mockInput({ ...options, prnumber: '1234' });
         expect(await getOptions()).toStrictEqual({
-            ...parsedOptions,
+            token: 'TOKEN',
+            testScript: 'npm run test:coverage',
+            threshold: 80,
+            workingDirectory: 'dir',
+            iconType: 'ascii',
+            annotations: 'all',
+            packageManager: 'npm',
+            skipStep: 'none',
+            customTitle: 'title',
+            coverageFile: 'file.json',
+            baseCoverageFile: 'base.json',
             prNumber: 1234,
             pullRequest: pr,
         });
-        expect(octokit.rest.pulls.get).toBeCalledTimes(1);
+        expect(octokit.pulls.get).toBeCalledTimes(1);
     });
 
     it('should not lookup pullRequest from prNumber if pull_request does exist on context', async () => {
         mockContext(prContext);
         mockInput({ ...options, prnumber: '1234' });
         expect(await getOptions()).toStrictEqual({
-            ...parsedOptions,
+            token: 'TOKEN',
+            testScript: 'npm run test:coverage',
+            threshold: 80,
+            workingDirectory: 'dir',
+            iconType: 'ascii',
+            annotations: 'all',
+            packageManager: 'npm',
+            skipStep: 'none',
+            customTitle: 'title',
+            coverageFile: 'file.json',
+            baseCoverageFile: 'base.json',
             prNumber: 1234,
             pullRequest: pr,
         });
-        expect(octokit.rest.pulls.get).not.toBeCalled();
+        expect(octokit.pulls.get).not.toBeCalled();
     });
 
     it('should return null prNumber and pullRequest with no prnumber input on push context', async () => {
         mockContext(pushContext);
         mockInput(options);
         expect(await getOptions()).toStrictEqual({
-            ...parsedOptions,
+            token: 'TOKEN',
+            testScript: 'npm run test:coverage',
+            threshold: 80,
+            workingDirectory: 'dir',
+            iconType: 'ascii',
+            annotations: 'all',
+            packageManager: 'npm',
+            skipStep: 'none',
+            customTitle: 'title',
+            coverageFile: 'file.json',
+            baseCoverageFile: 'base.json',
             prNumber: null,
             pullRequest: null,
         });
-        expect(octokit.rest.pulls.get).not.toBeCalled();
+        expect(octokit.pulls.get).not.toBeCalled();
     });
 });
 

@@ -23,7 +23,6 @@ const defaultOptions: Options = {
     skipStep: 'none',
     prNumber: null,
     pullRequest: null,
-    output: ['comment'],
 };
 
 const clearMocks = () => {

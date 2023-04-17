@@ -1,7 +1,6 @@
 import * as allCore from '@actions/core';
 import * as all from '@actions/github';
 import { getOctokit } from '@actions/github';
-import { loadConfig } from 'c12';
 import { mocked } from 'ts-jest/utils';
 
 import { Annotation } from '../src/annotations/Annotation';
@@ -12,11 +11,7 @@ import { formatFailedTestsAnnotations } from '../src/format/annotations/formatFa
 import { run } from '../src/run';
 import { createReport } from '../src/stages/createReport';
 import { getCoverage } from '../src/stages/getCoverage';
-import {
-    checkoutRef,
-    getCurrentBranch,
-    switchBranch,
-} from '../src/stages/switchBranch';
+import { switchBranch } from '../src/stages/switchBranch';
 import { JsonReport } from '../src/typings/JsonReport';
 import { getOptions, Options } from '../src/typings/Options';
 import { SummaryReport, TestRunReport } from '../src/typings/Report';
@@ -196,20 +191,12 @@ const defaultOptions: Options = {
         number: 345,
         base: {
             ref: '123',
-            repo: {
-                clone_url: 'https://github.com/test/repo.git',
-            },
-            sha: '12345',
         },
         head: {
             sha: '73342',
             ref: '456',
-            repo: {
-                clone_url: 'https://github.com/test/repo.git',
-            },
         },
     },
-    output: ['comment'],
 };
 
 jest.mock('../src/typings/Options.ts');
@@ -226,17 +213,12 @@ jest.mock('../src/format/annotations/formatCoverageAnnotations.ts');
 const getOptionsMock = mocked(getOptions);
 const getCoverageMock = mocked(getCoverage);
 const switchBranchMock = mocked(switchBranch);
-const getCurrentBranchMock = mocked(getCurrentBranch);
-const checkoutRefMock = mocked(checkoutRef);
 const createReportMock = mocked(createReport);
-const loadConfigMock = mocked(loadConfig);
 
 (getOctokit as jest.Mock<any, any>).mockReturnValue({
-    rest: {
-        checks: {
-            create: (fn: () => any) => {
-                fn();
-            },
+    checks: {
+        create: (fn: () => any) => {
+            fn();
         },
     },
 });
@@ -247,20 +229,13 @@ beforeEach(() => {
     getCoverageMock.mockClear();
     createReportMock.mockClear();
     (setFailed as jest.Mock).mockClear();
-    loadConfigMock.mockClear();
-    getCurrentBranchMock.mockClear();
-    checkoutRefMock.mockClear();
-    clearContextMock();
 
     getOptionsMock.mockResolvedValue(defaultOptions);
     getCoverageMock.mockResolvedValue(standardReport);
     createReportMock.mockReturnValue({
         runReport: {} as TestRunReport,
     } as SummaryReport);
-    loadConfigMock.mockResolvedValue({
-        config: {},
-    });
-    getCurrentBranchMock.mockResolvedValue('test-branch');
+    clearContextMock();
 });
 
 describe('run', () => {
@@ -286,17 +261,7 @@ describe('run', () => {
         const dataCollectorAddSpy = jest.spyOn(dataCollector, 'add');
         await run(dataCollector);
         expect(getCoverageMock).toBeCalledTimes(2);
-        expect(checkoutRefMock.mock.calls[0]).toEqual([
-            defaultOptions.pullRequest?.head,
-            'covbot-pr-head-remote',
-            'covbot/pr-head',
-        ]);
-        expect(checkoutRefMock.mock.calls[1]).toEqual([
-            defaultOptions.pullRequest?.base,
-            'covbot-pr-base-remote',
-            'covbot/pr-base',
-        ]);
-        expect(switchBranchMock).toBeCalledWith('test-branch');
+        expect(switchBranchMock).toBeCalledWith('123');
         expect(dataCollectorAddSpy).toBeCalledTimes(2);
     });
 
@@ -306,17 +271,7 @@ describe('run', () => {
         });
         await run();
         expect(getCoverageMock).toBeCalledTimes(2);
-        expect(checkoutRefMock.mock.calls[0]).toEqual([
-            defaultOptions.pullRequest?.head,
-            'covbot-pr-head-remote',
-            'covbot/pr-head',
-        ]);
-        expect(checkoutRefMock.mock.calls[1]).toEqual([
-            defaultOptions.pullRequest?.base,
-            'covbot-pr-base-remote',
-            'covbot/pr-base',
-        ]);
-        expect(switchBranchMock).toBeCalledWith('test-branch');
+        expect(switchBranchMock).toBeCalledWith('123');
     });
 
     it('should skip if headCoverage is not generated', async () => {
@@ -365,8 +320,6 @@ describe('run', () => {
         });
         await run();
         expect(getCoverageMock).toBeCalledTimes(1);
-        expect(checkoutRefMock).not.toBeCalled();
-        expect(checkoutRefMock).not.toBeCalled();
         expect(switchBranchMock).not.toBeCalled();
     });
 
@@ -379,17 +332,7 @@ describe('run', () => {
         const dataCollectorAddSpy = jest.spyOn(dataCollector, 'add');
         await run(dataCollector);
         expect(getCoverageMock).toBeCalledTimes(2);
-        expect(checkoutRefMock.mock.calls[0]).toEqual([
-            defaultOptions.pullRequest?.head,
-            'covbot-pr-head-remote',
-            'covbot/pr-head',
-        ]);
-        expect(checkoutRefMock.mock.calls[1]).toEqual([
-            defaultOptions.pullRequest?.base,
-            'covbot-pr-base-remote',
-            'covbot/pr-base',
-        ]);
-        expect(switchBranchMock).toBeCalledWith('test-branch');
+        expect(switchBranchMock).toBeCalledWith('123');
         expect(dataCollectorAddSpy).toBeCalledTimes(2);
     });
 
@@ -447,6 +390,18 @@ describe('run', () => {
             });
             await run();
             expect(createCoverageAnnotationsMock).not.toBeCalled();
+        });
+
+        it('should skip if there are no coverage annotations', async () => {
+            createCoverageAnnotationsMock.mockReturnValue([]);
+            await run();
+            expect(formatCoverageAnnotationsMock).not.toBeCalled();
+        });
+
+        it('should generate coverage annotations', async () => {
+            createCoverageAnnotationsMock.mockReturnValue([{} as Annotation]);
+            await run();
+            expect(formatCoverageAnnotationsMock).toBeCalled();
         });
     });
 });

@@ -5,7 +5,7 @@ export const generateCommitReport = async (
     repo: { owner: string; repo: string },
     octokit: ReturnType<typeof getOctokit>
 ) => {
-    await octokit.rest.repos.createCommitComment({
+    await octokit.repos.createCommitComment({
         ...repo,
         commit_sha: context.sha,
         body: report,

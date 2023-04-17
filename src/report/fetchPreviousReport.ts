@@ -18,7 +18,7 @@ export async function fetchPreviousReport(
     );
 
     const previousReport = commentList.find((comment) =>
-        comment.body?.includes(getReportTag(options))
+        comment.body?.startsWith(getReportTag(options))
     );
 
     return !previousReport ? null : previousReport;

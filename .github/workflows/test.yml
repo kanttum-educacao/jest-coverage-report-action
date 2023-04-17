@@ -1,12 +1,7 @@
 name: Coverage
 
-# Skip job run if PR updated
-concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
-
 on:
-    pull_request_target:
+    pull_request:
         paths-ignore:
             - 'docs/**'
     workflow_dispatch:
